@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Calendar, Plus, Brain, CheckCircle2, Clock, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,39 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
-const demoMeetings = [
+interface Meeting {
+  id: string;
+  title: string;
+  type: string;
+  date: string;
+  location: string;
+  status: "planned" | "in_progress" | "completed";
+  attendees: number;
+  agenda: string[];
+  aiMinutes?: string;
+}
+
+const typeLabels: Record<string, string> = {
+  alv: "ALV",
+  extraordinary: "Buitengewoon",
+  board: "Bestuur",
+};
+
+const statusLabels: Record<string, string> = {
+  planned: "Gepland",
+  in_progress: "Bezig",
+  completed: "Afgerond",
+};
+
+const statusColors: Record<string, string> = {
+  planned: "bg-blue-50 text-blue-700",
+  in_progress: "bg-yellow-50 text-yellow-700",
+  completed: "bg-green-50 text-green-700",
+};
+
+const initialMeetings: Meeting[] = [
   {
     id: "1",
     title: "Algemene Ledenvergadering 2026",
@@ -69,25 +101,55 @@ const demoMeetings = [
   },
 ];
 
-const typeLabels: Record<string, string> = {
-  alv: "ALV",
-  extraordinary: "Buitengewoon",
-  board: "Bestuur",
-};
-
-const statusLabels: Record<string, string> = {
-  planned: "Gepland",
-  in_progress: "Bezig",
-  completed: "Afgerond",
-};
-
-const statusColors: Record<string, string> = {
-  planned: "bg-blue-50 text-blue-700",
-  in_progress: "bg-yellow-50 text-yellow-700",
-  completed: "bg-green-50 text-green-700",
-};
-
 export default function VergaderingenPage() {
+  const [meetings, setMeetings] = useState<Meeting[]>(initialMeetings);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newType, setNewType] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [newTime, setNewTime] = useState("19:30");
+  const [newLocation, setNewLocation] = useState("");
+  const [newAgenda, setNewAgenda] = useState("");
+
+  function createMeeting() {
+    if (!newTitle || !newType || !newDate || !newLocation) {
+      toast.error("Vul alle verplichte velden in.");
+      return;
+    }
+    const meeting: Meeting = {
+      id: Date.now().toString(),
+      title: newTitle,
+      type: newType,
+      date: `${newDate}T${newTime}:00`,
+      location: newLocation,
+      status: "planned",
+      attendees: 0,
+      agenda: newAgenda ? newAgenda.split("\n").filter((l) => l.trim()) : [],
+    };
+    setMeetings((prev) => [meeting, ...prev]);
+    setNewTitle("");
+    setNewType("");
+    setNewDate("");
+    setNewTime("19:30");
+    setNewLocation("");
+    setNewAgenda("");
+    setDialogOpen(false);
+    toast.success("Vergadering aangemaakt!");
+  }
+
+  function generateMinutes(meetingId: string) {
+    setMeetings((prev) =>
+      prev.map((m) => {
+        if (m.id !== meetingId) return m;
+        return {
+          ...m,
+          aiMinutes: `AI-gegenereerde notulen voor "${m.title}". De vergadering vond plaats op ${new Date(m.date).toLocaleDateString("nl-NL")} in ${m.location}. ${m.agenda.length > 0 ? `Agendapunten besproken: ${m.agenda.join(", ")}.` : ""} Verdere details worden aangevuld zodra de AI-service is verbonden.`,
+        };
+      })
+    );
+    toast.success("Notulen gegenereerd met AI!");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -98,7 +160,7 @@ export default function VergaderingenPage() {
           </h1>
           <p className="text-muted-foreground">Plan vergaderingen en laat AI notulen genereren</p>
         </div>
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -111,12 +173,12 @@ export default function VergaderingenPage() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Titel</Label>
-                <Input placeholder="bijv. ALV 2026" />
+                <Label>Titel *</Label>
+                <Input placeholder="bijv. ALV 2026" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Type</Label>
-                <Select>
+                <Label>Type *</Label>
+                <Select value={newType} onValueChange={setNewType}>
                   <SelectTrigger><SelectValue placeholder="Selecteer type" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="alv">ALV (Algemene Ledenvergadering)</SelectItem>
@@ -127,23 +189,23 @@ export default function VergaderingenPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Datum</Label>
-                  <Input type="date" />
+                  <Label>Datum *</Label>
+                  <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Tijd</Label>
-                  <Input type="time" defaultValue="19:30" />
+                  <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Locatie</Label>
-                <Input placeholder="Adres of 'Online'" />
+                <Label>Locatie *</Label>
+                <Input placeholder="Adres of 'Online'" value={newLocation} onChange={(e) => setNewLocation(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Agenda (optioneel)</Label>
-                <Textarea placeholder="Voeg agendapunten toe, elk op een nieuwe regel" rows={4} />
+                <Textarea placeholder="Voeg agendapunten toe, elk op een nieuwe regel" rows={4} value={newAgenda} onChange={(e) => setNewAgenda(e.target.value)} />
               </div>
-              <Button className="w-full">Vergadering aanmaken</Button>
+              <Button className="w-full" onClick={createMeeting}>Vergadering aanmaken</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -151,13 +213,13 @@ export default function VergaderingenPage() {
 
       {/* Meetings List */}
       <div className="space-y-4">
-        {demoMeetings.map((meeting) => (
+        {meetings.map((meeting) => (
           <Card key={meeting.id}>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline">{typeLabels[meeting.type]}</Badge>
+                    <Badge variant="outline">{typeLabels[meeting.type] || meeting.type}</Badge>
                     <Badge className={statusColors[meeting.status]} variant="secondary">
                       {statusLabels[meeting.status]}
                     </Badge>
@@ -182,14 +244,16 @@ export default function VergaderingenPage() {
             </CardHeader>
             <CardContent>
               {/* Agenda */}
-              <div className="mb-4">
-                <p className="text-sm font-medium mb-2">Agenda</p>
-                <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
-                  {meeting.agenda.map((item, i) => (
-                    <li key={i}>{item}</li>
-                  ))}
-                </ol>
-              </div>
+              {meeting.agenda.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm font-medium mb-2">Agenda</p>
+                  <ol className="list-decimal list-inside space-y-1 text-sm text-muted-foreground">
+                    {meeting.agenda.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
 
               {/* AI Minutes */}
               {meeting.aiMinutes && (
@@ -204,7 +268,7 @@ export default function VergaderingenPage() {
 
               <div className="flex gap-2">
                 {meeting.status === "completed" && !meeting.aiMinutes && (
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={() => generateMinutes(meeting.id)}>
                     <Brain className="mr-1.5 h-3.5 w-3.5" />
                     Genereer notulen met AI
                   </Button>

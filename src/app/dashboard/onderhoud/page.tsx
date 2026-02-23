@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Wrench, Plus, Brain, Camera } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,21 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
+
+interface MaintenanceRequest {
+  id: string;
+  title: string;
+  description: string;
+  priority: string;
+  status: string;
+  reporterName: string;
+  createdAt: string;
+  estimatedCost: number;
+  actualCost?: number;
+  aiCategory: string;
+  aiPriorityReason: string;
+}
 
 const priorityConfig: Record<string, { label: string; color: string }> = {
   low: { label: "Laag", color: "bg-gray-50 text-gray-700" },
@@ -29,7 +45,14 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   completed: { label: "Afgerond", color: "bg-green-50 text-green-700" },
 };
 
-const demoRequests = [
+const aiAnalysis: Record<string, { category: string; reason: string }> = {
+  low: { category: "Algemeen", reason: "Lage prioriteit: geen direct veiligheidsrisico." },
+  medium: { category: "Onderhoud", reason: "Gemiddelde prioriteit: planbaar onderhoud aanbevolen." },
+  high: { category: "Veiligheid", reason: "Hoge prioriteit: kan schade of overlast veroorzaken." },
+  urgent: { category: "Acuut", reason: "Urgent: directe actie vereist om verdere schade te voorkomen." },
+};
+
+const initialRequests: MaintenanceRequest[] = [
   {
     id: "1", title: "Verlichting parkeergarage sectie B defect",
     description: "3 van de 6 TL-buizen in sectie B zijn kapot. Het is erg donker bij boxen 13-18.",
@@ -68,6 +91,43 @@ const demoRequests = [
 ];
 
 export default function OnderhoudPage() {
+  const [requests, setRequests] = useState<MaintenanceRequest[]>(initialRequests);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newPriority, setNewPriority] = useState("");
+
+  function addRequest() {
+    if (!newTitle || !newDesc || !newPriority) {
+      toast.error("Vul alle verplichte velden in.");
+      return;
+    }
+    const ai = aiAnalysis[newPriority] || aiAnalysis.medium;
+    const req: MaintenanceRequest = {
+      id: Date.now().toString(),
+      title: newTitle,
+      description: newDesc,
+      priority: newPriority,
+      status: "reported",
+      reporterName: "Hidde van den Bergh",
+      createdAt: new Date().toISOString().split("T")[0],
+      estimatedCost: 0,
+      aiCategory: ai.category,
+      aiPriorityReason: ai.reason,
+    };
+    setRequests((prev) => [req, ...prev]);
+    setNewTitle("");
+    setNewDesc("");
+    setNewPriority("");
+    setDialogOpen(false);
+    toast.success("Onderhoudsverzoek ingediend!");
+  }
+
+  const openCount = requests.filter((r) => r.status === "reported" || r.status === "assessed" || r.status === "approved").length;
+  const inProgressCount = requests.filter((r) => r.status === "in_progress").length;
+  const completedCount = requests.filter((r) => r.status === "completed").length;
+  const totalEstimated = requests.filter((r) => r.status !== "completed").reduce((s, r) => s + r.estimatedCost, 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -78,7 +138,7 @@ export default function OnderhoudPage() {
           </h1>
           <p className="text-muted-foreground">Meld en volg onderhoudsverzoeken</p>
         </div>
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -91,16 +151,16 @@ export default function OnderhoudPage() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Titel</Label>
-                <Input placeholder="Kort omschrijving van het probleem" />
+                <Label>Titel *</Label>
+                <Input placeholder="Kort omschrijving van het probleem" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Beschrijving</Label>
-                <Textarea placeholder="Beschrijf het probleem in detail" rows={3} />
+                <Label>Beschrijving *</Label>
+                <Textarea placeholder="Beschrijf het probleem in detail" rows={3} value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Prioriteit</Label>
-                <Select>
+                <Label>Prioriteit *</Label>
+                <Select value={newPriority} onValueChange={setNewPriority}>
                   <SelectTrigger><SelectValue placeholder="Selecteer prioriteit" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="low">Laag</SelectItem>
@@ -114,35 +174,35 @@ export default function OnderhoudPage() {
                 <Camera className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">Foto toevoegen (optioneel)</p>
               </div>
-              <Button className="w-full">Verzoek indienen</Button>
+              <Button className="w-full" onClick={addRequest}>Verzoek indienen</Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-2xl font-bold text-blue-600">2</p>
+            <p className="text-2xl font-bold text-blue-600">{openCount}</p>
             <p className="text-sm text-muted-foreground">Open</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-2xl font-bold text-yellow-600">1</p>
+            <p className="text-2xl font-bold text-yellow-600">{inProgressCount}</p>
             <p className="text-sm text-muted-foreground">In uitvoering</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-2xl font-bold text-green-600">1</p>
+            <p className="text-2xl font-bold text-green-600">{completedCount}</p>
             <p className="text-sm text-muted-foreground">Afgerond</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-2xl font-bold">&euro;4.425</p>
+            <p className="text-2xl font-bold">&euro;{totalEstimated.toLocaleString()}</p>
             <p className="text-sm text-muted-foreground">Geschatte kosten</p>
           </CardContent>
         </Card>
@@ -150,17 +210,17 @@ export default function OnderhoudPage() {
 
       {/* Requests */}
       <div className="space-y-4">
-        {demoRequests.map((req) => (
+        {requests.map((req) => (
           <Card key={req.id}>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge className={priorityConfig[req.priority].color} variant="secondary">
-                      {priorityConfig[req.priority].label}
+                    <Badge className={priorityConfig[req.priority]?.color} variant="secondary">
+                      {priorityConfig[req.priority]?.label}
                     </Badge>
-                    <Badge className={statusConfig[req.status].color} variant="secondary">
-                      {statusConfig[req.status].label}
+                    <Badge className={statusConfig[req.status]?.color} variant="secondary">
+                      {statusConfig[req.status]?.label}
                     </Badge>
                   </div>
                   <CardTitle className="text-base">{req.title}</CardTitle>
@@ -168,7 +228,7 @@ export default function OnderhoudPage() {
                     Gemeld door {req.reporterName} op {req.createdAt}
                   </CardDescription>
                 </div>
-                {req.estimatedCost && (
+                {req.estimatedCost > 0 && (
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">Geschat</p>
                     <p className="font-semibold">&euro;{req.estimatedCost.toLocaleString()}</p>

@@ -8,29 +8,28 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
-const demoMembers = [
+interface Member {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  unit: string;
+  role: string;
+  breukdeel: string;
+  active: boolean;
+}
+
+const initialMembers: Member[] = [
   { id: "1", name: "Hidde van den Bergh", email: "hidde@example.nl", phone: "06-12345678", unit: "Box 1", role: "board_chair", breukdeel: "1/24", active: true },
   { id: "2", name: "Jan de Vries", email: "jan@example.nl", phone: "06-23456789", unit: "Box 2", role: "board_treasurer", breukdeel: "1/24", active: true },
   { id: "3", name: "Maria Jansen", email: "maria@example.nl", phone: "06-34567890", unit: "Box 3", role: "owner", breukdeel: "1/24", active: true },
@@ -55,14 +54,49 @@ const roleBadgeVariant = (role: string) => {
 };
 
 export default function LedenPage() {
+  const [members, setMembers] = useState<Member[]>(initialMembers);
   const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newUnit, setNewUnit] = useState("");
+  const [newRole, setNewRole] = useState("");
 
-  const filtered = demoMembers.filter(
+  function addMember() {
+    if (!newName || !newEmail || !newUnit || !newRole) {
+      toast.error("Vul alle verplichte velden in.");
+      return;
+    }
+    const member: Member = {
+      id: Date.now().toString(),
+      name: newName,
+      email: newEmail,
+      phone: newPhone,
+      unit: newUnit,
+      role: newRole,
+      breukdeel: "1/24",
+      active: true,
+    };
+    setMembers((prev) => [...prev, member]);
+    setNewName("");
+    setNewEmail("");
+    setNewPhone("");
+    setNewUnit("");
+    setNewRole("");
+    setDialogOpen(false);
+    toast.success(`${newName} is toegevoegd als lid.`);
+  }
+
+  const filtered = members.filter(
     (m) =>
       m.name.toLowerCase().includes(search.toLowerCase()) ||
       m.email.toLowerCase().includes(search.toLowerCase()) ||
       m.unit.toLowerCase().includes(search.toLowerCase())
   );
+
+  const activeCount = members.filter((m) => m.active).length;
+  const boardCount = members.filter((m) => m.role.startsWith("board")).length;
 
   return (
     <div className="space-y-6">
@@ -74,7 +108,7 @@ export default function LedenPage() {
           </h1>
           <p className="text-muted-foreground">Beheer eigenaren en bestuursleden</p>
         </div>
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -87,26 +121,26 @@ export default function LedenPage() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Naam</Label>
-                <Input placeholder="Volledige naam" />
+                <Label>Naam *</Label>
+                <Input placeholder="Volledige naam" value={newName} onChange={(e) => setNewName(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>E-mail</Label>
-                <Input type="email" placeholder="email@voorbeeld.nl" />
+                <Label>E-mail *</Label>
+                <Input type="email" placeholder="email@voorbeeld.nl" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Telefoon</Label>
-                <Input type="tel" placeholder="06-12345678" />
+                <Input type="tel" placeholder="06-12345678" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Eenheid</Label>
-                <Select>
+                <Label>Eenheid *</Label>
+                <Select value={newUnit} onValueChange={setNewUnit}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecteer eenheid" />
                   </SelectTrigger>
                   <SelectContent>
                     {Array.from({ length: 24 }, (_, i) => (
-                      <SelectItem key={i} value={`box-${i + 1}`}>
+                      <SelectItem key={i} value={`Box ${i + 1}`}>
                         Box {i + 1}
                       </SelectItem>
                     ))}
@@ -114,8 +148,8 @@ export default function LedenPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Rol</Label>
-                <Select>
+                <Label>Rol *</Label>
+                <Select value={newRole} onValueChange={setNewRole}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecteer rol" />
                   </SelectTrigger>
@@ -128,7 +162,7 @@ export default function LedenPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="w-full">Toevoegen</Button>
+              <Button className="w-full" onClick={addMember}>Toevoegen</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -138,13 +172,13 @@ export default function LedenPage() {
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-2xl font-bold">18</p>
+            <p className="text-2xl font-bold">{activeCount}</p>
             <p className="text-sm text-muted-foreground">Actieve leden</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-2xl font-bold">4</p>
+            <p className="text-2xl font-bold">{boardCount}</p>
             <p className="text-sm text-muted-foreground">Bestuursleden</p>
           </CardContent>
         </Card>

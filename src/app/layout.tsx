@@ -17,6 +17,21 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "VvE Digitaal - Slimme VvE Beheer met AI",
   description: "De slimste VvE beheerder is geen persoon, maar een platform. AI-gestuurde VvE beheer voor garageboxen, opslagruimtes en appartementen.",
+  openGraph: {
+    title: "VvE Digitaal - Slimme VvE Beheer met AI",
+    description: "AI-gestuurde VvE beheer voor garageboxen, opslagruimtes en appartementen. Digitaal stemmen, financieel overzicht, MJOP en meer.",
+    type: "website",
+    locale: "nl_NL",
+    siteName: "VvE Digitaal",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "VvE Digitaal - Slimme VvE Beheer met AI",
+    description: "AI-gestuurde VvE beheer voor garageboxen, opslagruimtes en appartementen.",
+  },
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

@@ -16,21 +16,39 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
-const demoVotes = [
+interface VoteItem {
+  id: string;
+  subject: string;
+  description: string;
+  type: string;
+  status: "open" | "closed";
+  deadline: string;
+  forCount: number;
+  againstCount: number;
+  abstainCount: number;
+  totalMembers: number;
+  voted: number;
+  result: string | null;
+  myVote: string | null;
+}
+
+const initialVotes: VoteItem[] = [
   {
     id: "1",
     subject: "Vervanging garagedeuren sectie A",
-    description: "Voorstel om de 12 garagedeuren in sectie A te vervangen door geïsoleerde sectionaaldeuren. Geschatte kosten: \u20ac18.000 uit reservefonds.",
+    description: "Voorstel om de 12 garagedeuren in sectie A te vervangen door ge\u00efsoleerde sectionaaldeuren. Geschatte kosten: \u20ac18.000 uit reservefonds.",
     type: "qualified_majority",
     status: "open",
-    deadline: "2026-02-28",
+    deadline: "2026-03-15",
     forCount: 14,
     againstCount: 3,
     abstainCount: 1,
     totalMembers: 24,
     voted: 18,
     result: null,
+    myVote: null,
   },
   {
     id: "2",
@@ -38,18 +56,19 @@ const demoVotes = [
     description: "Voorstel om de maandelijkse VvE-bijdrage te verhogen van \u20ac50 naar \u20ac55 per eenheid, vanwege gestegen energiekosten.",
     type: "simple_majority",
     status: "open",
-    deadline: "2026-03-15",
+    deadline: "2026-03-31",
     forCount: 8,
     againstCount: 5,
     abstainCount: 0,
     totalMembers: 24,
     voted: 13,
     result: null,
+    myVote: null,
   },
   {
     id: "3",
     subject: "Goedkeuring begroting 2026",
-    description: "Jaarlijkse begroting voor 2026. Totale begroting: \u20ac14.800. Details beschikbaar in de bijlage.",
+    description: "Jaarlijkse begroting voor 2026. Totale begroting: \u20ac14.800.",
     type: "simple_majority",
     status: "closed",
     deadline: "2025-12-15",
@@ -59,6 +78,7 @@ const demoVotes = [
     totalMembers: 24,
     voted: 16,
     result: "approved",
+    myVote: "for",
   },
   {
     id: "4",
@@ -73,6 +93,7 @@ const demoVotes = [
     totalMembers: 24,
     voted: 16,
     result: "approved",
+    myVote: "for",
   },
 ];
 
@@ -83,10 +104,65 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function StemmenPage() {
-  const [myVote, setMyVote] = useState<string>("");
+  const [votes, setVotes] = useState<VoteItem[]>(initialVotes);
+  const [selectedVote, setSelectedVote] = useState<Record<string, string>>({});
+  const [newOpen, setNewOpen] = useState(false);
+  const [newSubject, setNewSubject] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newType, setNewType] = useState("");
+  const [newDeadline, setNewDeadline] = useState("");
 
-  const openVotes = demoVotes.filter((v) => v.status === "open");
-  const closedVotes = demoVotes.filter((v) => v.status === "closed");
+  function castVote(voteId: string) {
+    const choice = selectedVote[voteId];
+    if (!choice) return;
+
+    setVotes((prev) =>
+      prev.map((v) => {
+        if (v.id !== voteId) return v;
+        return {
+          ...v,
+          forCount: v.forCount + (choice === "for" ? 1 : 0),
+          againstCount: v.againstCount + (choice === "against" ? 1 : 0),
+          abstainCount: v.abstainCount + (choice === "abstain" ? 1 : 0),
+          voted: v.voted + 1,
+          myVote: choice,
+        };
+      })
+    );
+    toast.success("Uw stem is uitgebracht!");
+  }
+
+  function createVote() {
+    if (!newSubject || !newType || !newDeadline) {
+      toast.error("Vul alle verplichte velden in.");
+      return;
+    }
+    const newVote: VoteItem = {
+      id: Date.now().toString(),
+      subject: newSubject,
+      description: newDescription,
+      type: newType,
+      status: "open",
+      deadline: newDeadline,
+      forCount: 0,
+      againstCount: 0,
+      abstainCount: 0,
+      totalMembers: 24,
+      voted: 0,
+      result: null,
+      myVote: null,
+    };
+    setVotes((prev) => [newVote, ...prev]);
+    setNewSubject("");
+    setNewDescription("");
+    setNewType("");
+    setNewDeadline("");
+    setNewOpen(false);
+    toast.success("Stemming aangemaakt!");
+  }
+
+  const openVotes = votes.filter((v) => v.status === "open");
+  const closedVotes = votes.filter((v) => v.status === "closed");
 
   return (
     <div className="space-y-6">
@@ -98,7 +174,7 @@ export default function StemmenPage() {
           </h1>
           <p className="text-muted-foreground">Digitaal stemmen met automatische quorum-berekening</p>
         </div>
-        <Dialog>
+        <Dialog open={newOpen} onOpenChange={setNewOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -111,16 +187,16 @@ export default function StemmenPage() {
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label>Onderwerp</Label>
-                <Input placeholder="Waar wordt over gestemd?" />
+                <Label>Onderwerp *</Label>
+                <Input placeholder="Waar wordt over gestemd?" value={newSubject} onChange={(e) => setNewSubject(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label>Toelichting</Label>
-                <Textarea placeholder="Beschrijf het voorstel" rows={3} />
+                <Textarea placeholder="Beschrijf het voorstel" rows={3} value={newDescription} onChange={(e) => setNewDescription(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>Type meerderheid</Label>
-                <Select>
+                <Label>Type meerderheid *</Label>
+                <Select value={newType} onValueChange={setNewType}>
                   <SelectTrigger><SelectValue placeholder="Selecteer type" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="simple_majority">Gewone meerderheid (&gt;50%)</SelectItem>
@@ -130,10 +206,10 @@ export default function StemmenPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Deadline</Label>
-                <Input type="date" />
+                <Label>Deadline *</Label>
+                <Input type="date" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} />
               </div>
-              <Button className="w-full">Stemming starten</Button>
+              <Button className="w-full" onClick={createVote}>Stemming starten</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -144,7 +220,6 @@ export default function StemmenPage() {
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">Openstaande stemmingen</h2>
           {openVotes.map((vote) => {
-            const quorumNeeded = vote.type === "qualified_majority" ? Math.ceil(vote.totalMembers * 2 / 3) : Math.ceil(vote.totalMembers / 2) + 1;
             const quorumMet = vote.voted >= Math.ceil(vote.totalMembers / 2);
             const forPct = vote.voted > 0 ? Math.round((vote.forCount / vote.voted) * 100) : 0;
             const againstPct = vote.voted > 0 ? Math.round((vote.againstCount / vote.voted) * 100) : 0;
@@ -190,7 +265,7 @@ export default function StemmenPage() {
                       {quorumMet ? (
                         <Badge className="bg-green-50 text-green-700 text-xs" variant="secondary">Quorum bereikt</Badge>
                       ) : (
-                        <Badge className="bg-orange-50 text-orange-700 text-xs" variant="secondary">Nog {quorumNeeded - vote.voted} nodig</Badge>
+                        <Badge className="bg-orange-50 text-orange-700 text-xs" variant="secondary">Nog {Math.ceil(vote.totalMembers / 2) - vote.voted} nodig</Badge>
                       )}
                     </span>
                     <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -200,26 +275,39 @@ export default function StemmenPage() {
                   </div>
 
                   {/* Cast Vote */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm font-medium mb-3">Uw stem uitbrengen</p>
-                    <RadioGroup value={myVote} onValueChange={setMyVote} className="flex gap-4">
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="for" id={`for-${vote.id}`} />
-                        <Label htmlFor={`for-${vote.id}`} className="text-green-700 font-medium">Voor</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="against" id={`against-${vote.id}`} />
-                        <Label htmlFor={`against-${vote.id}`} className="text-red-700 font-medium">Tegen</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="abstain" id={`abstain-${vote.id}`} />
-                        <Label htmlFor={`abstain-${vote.id}`} className="text-gray-500">Onthouding</Label>
-                      </div>
-                    </RadioGroup>
-                    <Button className="mt-3" size="sm" disabled={!myVote}>
-                      Stem uitbrengen
-                    </Button>
-                  </div>
+                  {vote.myVote ? (
+                    <div className="bg-green-50 rounded-lg p-4 flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <span className="text-sm font-medium text-green-800">
+                        U heeft gestemd: {vote.myVote === "for" ? "Voor" : vote.myVote === "against" ? "Tegen" : "Onthouding"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <p className="text-sm font-medium mb-3">Uw stem uitbrengen</p>
+                      <RadioGroup
+                        value={selectedVote[vote.id] || ""}
+                        onValueChange={(val) => setSelectedVote((prev) => ({ ...prev, [vote.id]: val }))}
+                        className="flex gap-4"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="for" id={`for-${vote.id}`} />
+                          <Label htmlFor={`for-${vote.id}`} className="text-green-700 font-medium cursor-pointer">Voor</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="against" id={`against-${vote.id}`} />
+                          <Label htmlFor={`against-${vote.id}`} className="text-red-700 font-medium cursor-pointer">Tegen</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="abstain" id={`abstain-${vote.id}`} />
+                          <Label htmlFor={`abstain-${vote.id}`} className="text-gray-500 cursor-pointer">Onthouding</Label>
+                        </div>
+                      </RadioGroup>
+                      <Button className="mt-3" size="sm" disabled={!selectedVote[vote.id]} onClick={() => castVote(vote.id)}>
+                        Stem uitbrengen
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

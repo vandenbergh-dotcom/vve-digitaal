@@ -63,11 +63,24 @@ export default function AIAssistentPage() {
     setInput("");
     setLoading(true);
 
-    // Simulate AI response (or call real API)
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    const response = demoResponses[question] ||
-      `Bedankt voor uw vraag over "${question}". \n\nOp basis van de documenten van uw VvE kan ik u het volgende vertellen:\n\nDit is een demonstratie van de AI-assistent. In de productieversie analyseer ik uw splitsingsakte, huishoudelijk reglement en alle andere VvE-documenten om een nauwkeurig antwoord te geven met verwijzingen naar de relevante artikelen.\n\nHeeft u uw documenten al ge\u00fcpload? Ga dan naar **Documenten** in het menu om uw splitsingsakte en andere stukken te uploaden.\n\n_Tip: Hoe meer documenten u uploadt, hoe beter ik uw vragen kan beantwoorden._`;
+    // Try real API first, fall back to demo responses
+    let response: string;
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: question,
+          history: messages.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      });
+      const data = await res.json();
+      response = data.content || data.error || "Geen antwoord ontvangen.";
+    } catch {
+      // Fall back to demo responses if API fails
+      response = demoResponses[question] ||
+        `Bedankt voor uw vraag. De AI-assistent is momenteel niet verbonden met de API. In de productieversie analyseer ik uw splitsingsakte, huishoudelijk reglement en alle VvE-documenten om een nauwkeurig antwoord te geven.\n\n_Tip: Stel een van de voorgestelde vragen voor een demo-antwoord._`;
+    }
 
     const assistantMsg: Message = {
       id: (Date.now() + 1).toString(),
