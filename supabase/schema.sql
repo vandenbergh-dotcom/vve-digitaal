@@ -1,44 +1,45 @@
--- VvE Digitaal - Database Schema
--- Run this in Supabase SQL editor to set up the database
+-- VvE Digitaal - Complete Database Schema
+-- Run this in your Supabase SQL Editor after creating a new project
 
--- Enable UUID extension
+-- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- =====================================================
+-- ============================================
 -- CORE TABLES
--- =====================================================
+-- ============================================
 
--- VvE's (Associations)
 CREATE TABLE vves (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   address TEXT NOT NULL,
   city TEXT NOT NULL,
   postal_code TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('garage', 'storage', 'apartment', 'mixed')),
-  total_units INTEGER NOT NULL DEFAULT 0,
+  type TEXT NOT NULL DEFAULT 'garage' CHECK (type IN ('garage', 'storage', 'apartment', 'mixed')),
+  total_units INT NOT NULL DEFAULT 0,
   kvk_number TEXT,
   iban TEXT,
-  monthly_contribution DECIMAL(10,2) DEFAULT 0,
-  reserve_fund_balance DECIMAL(10,2) DEFAULT 0,
+  iban_name TEXT,
+  default_contribution DECIMAL(10,2) DEFAULT 50.00,
+  payment_term_days INT DEFAULT 30,
+  email_from TEXT,
+  email_reply_to TEXT,
+  invoice_footer TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   created_by UUID REFERENCES auth.users(id)
 );
 
--- Units (individual garage boxes / apartments)
 CREATE TABLE units (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
   unit_number TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('garage', 'storage', 'apartment', 'commercial')),
-  breukdeel_numerator INTEGER NOT NULL DEFAULT 1,
-  breukdeel_denominator INTEGER NOT NULL DEFAULT 1,
-  floor_area_m2 DECIMAL(10,2),
+  type TEXT NOT NULL DEFAULT 'garage' CHECK (type IN ('garage', 'storage', 'apartment', 'commercial')),
+  breukdeel_numerator INT NOT NULL DEFAULT 1,
+  breukdeel_denominator INT NOT NULL DEFAULT 1,
+  floor_area_m2 DECIMAL(8,2),
   description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  UNIQUE(vve_id, unit_number)
 );
 
--- Members/Owners
 CREATE TABLE members (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id),
@@ -52,22 +53,41 @@ CREATE TABLE members (
   joined_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Documents
-CREATE TABLE documents (
+CREATE INDEX idx_members_vve ON members(vve_id);
+CREATE INDEX idx_members_user ON members(user_id);
+CREATE INDEX idx_members_email ON members(email);
+
+-- ============================================
+-- FINANCIAL TABLES
+-- ============================================
+
+CREATE TABLE invoices (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  invoice_number TEXT NOT NULL UNIQUE,
   vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('splitsingsakte', 'huishoudelijk_reglement', 'insurance', 'minutes', 'financial', 'jaarverslag', 'mjop', 'maintenance', 'other')),
-  file_path TEXT NOT NULL,
-  file_size INTEGER DEFAULT 0,
-  mime_type TEXT,
-  ai_summary TEXT,
-  ai_extracted_data JSONB,
-  uploaded_by UUID REFERENCES auth.users(id),
-  uploaded_at TIMESTAMPTZ DEFAULT NOW()
+  member_id UUID NOT NULL REFERENCES members(id),
+  items JSONB NOT NULL DEFAULT '[]',
+  subtotal DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total DECIMAL(10,2) NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'open', 'paid', 'overdue', 'cancelled')),
+  period TEXT NOT NULL,
+  issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  due_date DATE NOT NULL,
+  paid_date DATE,
+  sent_date DATE,
+  payment_reference TEXT,
+  mollie_payment_id TEXT,
+  notes TEXT,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Transactions
+CREATE INDEX idx_invoices_vve ON invoices(vve_id);
+CREATE INDEX idx_invoices_member ON invoices(member_id);
+CREATE INDEX idx_invoices_status ON invoices(status);
+CREATE INDEX idx_invoices_due_date ON invoices(due_date);
+CREATE INDEX idx_invoices_mollie ON invoices(mollie_payment_id);
+
 CREATE TABLE transactions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
@@ -77,18 +97,53 @@ CREATE TABLE transactions (
   category TEXT,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   member_id UUID REFERENCES members(id),
+  invoice_id UUID REFERENCES invoices(id),
   ai_category TEXT,
   receipt_path TEXT,
   created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Meetings
+CREATE INDEX idx_transactions_vve ON transactions(vve_id);
+CREATE INDEX idx_transactions_date ON transactions(date);
+
+-- Sequential invoice numbering per VvE per year
+CREATE TABLE invoice_counters (
+  vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
+  year INT NOT NULL,
+  last_number INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (vve_id, year)
+);
+
+-- ============================================
+-- DOCUMENT TABLES
+-- ============================================
+
+CREATE TABLE documents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('splitsingsakte', 'huishoudelijk_reglement', 'insurance', 'minutes', 'financial', 'jaarverslag', 'mjop', 'maintenance', 'other')),
+  file_path TEXT NOT NULL,
+  file_size INT,
+  mime_type TEXT,
+  ai_summary TEXT,
+  ai_extracted_data JSONB,
+  uploaded_by UUID REFERENCES auth.users(id),
+  uploaded_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_documents_vve ON documents(vve_id);
+
+-- ============================================
+-- MEETING & VOTING TABLES
+-- ============================================
+
 CREATE TABLE meetings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('alv', 'extraordinary', 'board')),
+  type TEXT NOT NULL DEFAULT 'alv' CHECK (type IN ('alv', 'extraordinary', 'board')),
   date TIMESTAMPTZ NOT NULL,
   location TEXT,
   agenda JSONB DEFAULT '[]',
@@ -99,22 +154,23 @@ CREATE TABLE meetings (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Votes
+CREATE INDEX idx_meetings_vve ON meetings(vve_id);
+
 CREATE TABLE votes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   meeting_id UUID REFERENCES meetings(id),
   vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
   subject TEXT NOT NULL,
   description TEXT,
-  type TEXT NOT NULL CHECK (type IN ('simple_majority', 'qualified_majority', 'unanimous')),
+  type TEXT NOT NULL DEFAULT 'simple_majority' CHECK (type IN ('simple_majority', 'qualified_majority', 'unanimous')),
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
   result TEXT CHECK (result IN ('approved', 'rejected', 'no_quorum')),
   deadline TIMESTAMPTZ,
-  created_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Vote Responses
+CREATE INDEX idx_votes_vve ON votes(vve_id);
+
 CREATE TABLE vote_responses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vote_id UUID NOT NULL REFERENCES votes(id) ON DELETE CASCADE,
@@ -125,12 +181,15 @@ CREATE TABLE vote_responses (
   UNIQUE(vote_id, member_id)
 );
 
--- Maintenance Requests
+-- ============================================
+-- MAINTENANCE TABLES
+-- ============================================
+
 CREATE TABLE maintenance_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
-  description TEXT NOT NULL,
+  description TEXT,
   priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
   status TEXT NOT NULL DEFAULT 'reported' CHECK (status IN ('reported', 'assessed', 'approved', 'in_progress', 'completed')),
   reported_by UUID REFERENCES members(id),
@@ -143,48 +202,27 @@ CREATE TABLE maintenance_requests (
   resolved_at TIMESTAMPTZ
 );
 
--- MJOP Items (Multi-year Maintenance Plan)
+CREATE INDEX idx_maintenance_vve ON maintenance_requests(vve_id);
+
 CREATE TABLE mjop_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
   component TEXT NOT NULL,
-  description TEXT NOT NULL,
-  estimated_cost DECIMAL(10,2) NOT NULL,
-  planned_year INTEGER NOT NULL,
+  description TEXT,
+  estimated_cost DECIMAL(10,2) NOT NULL DEFAULT 0,
+  planned_year INT NOT NULL,
   priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high')),
   status TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'in_progress', 'completed', 'deferred')),
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Annual Reports
-CREATE TABLE annual_reports (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
-  year INTEGER NOT NULL,
-  total_income DECIMAL(10,2) DEFAULT 0,
-  total_expenses DECIMAL(10,2) DEFAULT 0,
-  reserve_balance DECIMAL(10,2) DEFAULT 0,
-  key_decisions JSONB DEFAULT '[]',
-  maintenance_completed JSONB DEFAULT '[]',
-  ai_summary TEXT,
-  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved')),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(vve_id, year)
-);
+CREATE INDEX idx_mjop_vve ON mjop_items(vve_id);
 
--- Chat Messages (AI Assistant)
-CREATE TABLE chat_messages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES auth.users(id),
-  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-  content TEXT NOT NULL,
-  context JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- ============================================
+-- COMMUNICATION TABLES
+-- ============================================
 
--- Announcements
 CREATE TABLE announcements (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
@@ -196,139 +234,196 @@ CREATE TABLE announcements (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- =====================================================
--- INDEXES
--- =====================================================
-
-CREATE INDEX idx_units_vve ON units(vve_id);
-CREATE INDEX idx_members_vve ON members(vve_id);
-CREATE INDEX idx_members_user ON members(user_id);
-CREATE INDEX idx_documents_vve ON documents(vve_id);
-CREATE INDEX idx_transactions_vve ON transactions(vve_id);
-CREATE INDEX idx_transactions_date ON transactions(date);
-CREATE INDEX idx_meetings_vve ON meetings(vve_id);
-CREATE INDEX idx_votes_vve ON votes(vve_id);
-CREATE INDEX idx_vote_responses_vote ON vote_responses(vote_id);
-CREATE INDEX idx_maintenance_vve ON maintenance_requests(vve_id);
-CREATE INDEX idx_mjop_vve ON mjop_items(vve_id);
-CREATE INDEX idx_annual_reports_vve ON annual_reports(vve_id);
-CREATE INDEX idx_chat_messages_vve ON chat_messages(vve_id);
 CREATE INDEX idx_announcements_vve ON announcements(vve_id);
 
--- =====================================================
--- ROW LEVEL SECURITY (RLS)
--- =====================================================
+CREATE TABLE chat_messages (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content TEXT NOT NULL,
+  context JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_chat_vve ON chat_messages(vve_id);
+
+-- ============================================
+-- ANNUAL REPORTS
+-- ============================================
+
+CREATE TABLE annual_reports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
+  year INT NOT NULL,
+  total_income DECIMAL(10,2) DEFAULT 0,
+  total_expenses DECIMAL(10,2) DEFAULT 0,
+  reserve_balance DECIMAL(10,2) DEFAULT 0,
+  key_decisions TEXT[] DEFAULT '{}',
+  maintenance_completed TEXT[] DEFAULT '{}',
+  ai_summary TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(vve_id, year)
+);
+
+-- ============================================
+-- NOTIFICATION SETTINGS
+-- ============================================
+
+CREATE TABLE notification_settings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  vve_id UUID NOT NULL REFERENCES vves(id) ON DELETE CASCADE,
+  notify_invoice BOOLEAN DEFAULT TRUE,
+  notify_overdue BOOLEAN DEFAULT TRUE,
+  auto_overdue_days INT DEFAULT 7,
+  notify_meeting BOOLEAN DEFAULT TRUE,
+  notify_vote BOOLEAN DEFAULT TRUE,
+  notify_maintenance BOOLEAN DEFAULT TRUE,
+  UNIQUE(vve_id)
+);
+
+-- ============================================
+-- ROW LEVEL SECURITY
+-- ============================================
 
 ALTER TABLE vves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE units ENABLE ROW LEVEL SECURITY;
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
-ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invoice_counters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meetings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE vote_responses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE maintenance_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mjop_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE annual_reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE annual_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_settings ENABLE ROW LEVEL SECURITY;
 
--- Users can see VvE's they are members of
-CREATE POLICY "Members can view their VvE" ON vves
-  FOR SELECT USING (
-    id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
+-- Helper: get VvE IDs for current user
+CREATE OR REPLACE FUNCTION user_vve_ids()
+RETURNS SETOF UUID AS $$
+  SELECT vve_id FROM members WHERE user_id = auth.uid() AND is_active = TRUE;
+$$ LANGUAGE SQL SECURITY DEFINER STABLE;
+
+-- Helper: check if user is board member
+CREATE OR REPLACE FUNCTION is_board_member(target_vve_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM members
+    WHERE user_id = auth.uid()
+    AND vve_id = target_vve_id
+    AND is_active = TRUE
+    AND role IN ('board_chair', 'board_secretary', 'board_treasurer', 'board_member')
   );
+$$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
--- Users can create VvE's
-CREATE POLICY "Authenticated users can create VvE" ON vves
-  FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+-- VvEs
+CREATE POLICY "Members can view their VvEs" ON vves FOR SELECT USING (id IN (SELECT user_vve_ids()));
+CREATE POLICY "Users can create VvE" ON vves FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "Board can update VvE" ON vves FOR UPDATE USING (is_board_member(id));
 
--- Members can view units in their VvE
-CREATE POLICY "Members can view units" ON units
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Units
+CREATE POLICY "Members can view units" ON units FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage units" ON units FOR ALL USING (is_board_member(vve_id));
 
--- Members can view other members in their VvE
-CREATE POLICY "Members can view members" ON members
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Members
+CREATE POLICY "Members can view co-members" ON members FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage members" ON members FOR ALL USING (is_board_member(vve_id));
 
--- Members can view documents in their VvE
-CREATE POLICY "Members can view documents" ON documents
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Invoices
+CREATE POLICY "Members see own invoices" ON invoices FOR SELECT USING (
+  vve_id IN (SELECT user_vve_ids()) AND (
+    is_board_member(vve_id) OR member_id IN (SELECT id FROM members WHERE user_id = auth.uid())
+  )
+);
+CREATE POLICY "Board can manage invoices" ON invoices FOR ALL USING (is_board_member(vve_id));
 
--- Board members can manage documents
-CREATE POLICY "Board can manage documents" ON documents
-  FOR ALL USING (
-    vve_id IN (
-      SELECT vve_id FROM members
-      WHERE user_id = auth.uid()
-      AND role IN ('board_chair', 'board_secretary', 'board_treasurer', 'board_member')
-    )
-  );
+-- Transactions
+CREATE POLICY "Members can view transactions" ON transactions FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage transactions" ON transactions FOR ALL USING (is_board_member(vve_id));
 
--- Members can view transactions
-CREATE POLICY "Members can view transactions" ON transactions
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Invoice counters
+CREATE POLICY "Board can manage counters" ON invoice_counters FOR ALL USING (is_board_member(vve_id));
 
--- Members can view meetings
-CREATE POLICY "Members can view meetings" ON meetings
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Documents
+CREATE POLICY "Members can view documents" ON documents FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage documents" ON documents FOR ALL USING (is_board_member(vve_id));
 
--- Members can view and cast votes
-CREATE POLICY "Members can view votes" ON votes
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Meetings
+CREATE POLICY "Members can view meetings" ON meetings FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage meetings" ON meetings FOR ALL USING (is_board_member(vve_id));
 
-CREATE POLICY "Members can cast votes" ON vote_responses
-  FOR INSERT WITH CHECK (
-    vote_id IN (
-      SELECT v.id FROM votes v
-      JOIN members m ON m.vve_id = v.vve_id
-      WHERE m.user_id = auth.uid()
-    )
-  );
+-- Votes
+CREATE POLICY "Members can view votes" ON votes FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage votes" ON votes FOR ALL USING (is_board_member(vve_id));
 
--- Members can view and create maintenance requests
-CREATE POLICY "Members can view maintenance" ON maintenance_requests
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Vote responses
+CREATE POLICY "Members can vote" ON vote_responses FOR INSERT WITH CHECK (
+  vote_id IN (SELECT id FROM votes WHERE vve_id IN (SELECT user_vve_ids()))
+);
+CREATE POLICY "Members can view votes" ON vote_responses FOR SELECT USING (
+  vote_id IN (SELECT id FROM votes WHERE vve_id IN (SELECT user_vve_ids()))
+);
 
-CREATE POLICY "Members can create maintenance" ON maintenance_requests
-  FOR INSERT WITH CHECK (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Maintenance
+CREATE POLICY "Members can view maintenance" ON maintenance_requests FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Members can create maintenance" ON maintenance_requests FOR INSERT WITH CHECK (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage maintenance" ON maintenance_requests FOR UPDATE USING (is_board_member(vve_id));
 
--- Members can view MJOP
-CREATE POLICY "Members can view MJOP" ON mjop_items
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- MJOP
+CREATE POLICY "Members can view MJOP" ON mjop_items FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage MJOP" ON mjop_items FOR ALL USING (is_board_member(vve_id));
 
--- Members can view annual reports
-CREATE POLICY "Members can view annual reports" ON annual_reports
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Announcements
+CREATE POLICY "Members can view announcements" ON announcements FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage announcements" ON announcements FOR ALL USING (is_board_member(vve_id));
 
--- Members can use AI chat
-CREATE POLICY "Members can use chat" ON chat_messages
-  FOR ALL USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Chat
+CREATE POLICY "Users own chat" ON chat_messages FOR ALL USING (user_id = auth.uid() AND vve_id IN (SELECT user_vve_ids()));
 
--- Members can view announcements
-CREATE POLICY "Members can view announcements" ON announcements
-  FOR SELECT USING (
-    vve_id IN (SELECT vve_id FROM members WHERE user_id = auth.uid())
-  );
+-- Annual reports
+CREATE POLICY "Members can view reports" ON annual_reports FOR SELECT USING (vve_id IN (SELECT user_vve_ids()));
+CREATE POLICY "Board can manage reports" ON annual_reports FOR ALL USING (is_board_member(vve_id));
+
+-- Notification settings
+CREATE POLICY "Board can manage notifications" ON notification_settings FOR ALL USING (is_board_member(vve_id));
+
+-- ============================================
+-- FUNCTIONS
+-- ============================================
+
+-- Auto-increment invoice number
+CREATE OR REPLACE FUNCTION next_invoice_number(target_vve_id UUID, target_year INT)
+RETURNS TEXT AS $$
+DECLARE
+  next_num INT;
+  vve_prefix TEXT;
+BEGIN
+  INSERT INTO invoice_counters (vve_id, year, last_number)
+  VALUES (target_vve_id, target_year, 1)
+  ON CONFLICT (vve_id, year)
+  DO UPDATE SET last_number = invoice_counters.last_number + 1
+  RETURNING last_number INTO next_num;
+
+  SELECT UPPER(SUBSTRING(name FROM 1 FOR 3)) INTO vve_prefix FROM vves WHERE id = target_vve_id;
+  RETURN vve_prefix || '-' || target_year || '-' || LPAD(next_num::TEXT, 4, '0');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Mark overdue invoices (call via cron or edge function)
+CREATE OR REPLACE FUNCTION mark_overdue_invoices()
+RETURNS INT AS $$
+DECLARE
+  updated INT;
+BEGIN
+  UPDATE invoices SET status = 'overdue'
+  WHERE status IN ('sent', 'open') AND due_date < CURRENT_DATE;
+  GET DIAGNOSTICS updated = ROW_COUNT;
+  RETURN updated;
+END;
+$$ LANGUAGE plpgsql;

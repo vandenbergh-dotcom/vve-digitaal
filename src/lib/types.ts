@@ -8,6 +8,12 @@ export interface VvE {
   total_units: number
   kvk_number?: string
   iban?: string
+  iban_name?: string
+  default_contribution?: number
+  payment_term_days?: number
+  email_from?: string
+  email_reply_to?: string
+  invoice_footer?: string
   created_at: string
   created_by: string
 }
@@ -170,4 +176,37 @@ export interface AnnualReport {
   ai_summary?: string
   status: 'draft' | 'approved'
   created_at: string
+}
+
+export type InvoiceStatus = 'draft' | 'sent' | 'open' | 'paid' | 'overdue' | 'cancelled'
+
+export interface InvoiceItem {
+  id: string
+  description: string
+  quantity: number
+  unit_price: number
+  total: number
+}
+
+export interface Invoice {
+  id: string
+  invoice_number: string
+  vve_id: string
+  member_id: string
+  member_name: string
+  member_email: string
+  unit: string
+  breukdeel: string
+  items: InvoiceItem[]
+  subtotal: number
+  total: number
+  status: InvoiceStatus
+  period: string
+  issue_date: string
+  due_date: string
+  paid_date?: string
+  sent_date?: string
+  notes?: string
+  created_at: string
+  created_by: string
 }

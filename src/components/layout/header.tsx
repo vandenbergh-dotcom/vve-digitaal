@@ -2,26 +2,30 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, LogOut, Building2 } from "lucide-react";
+import { Menu, LogOut, Building2, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MobileSidebar } from "./sidebar";
-import { createClient } from "@/lib/supabase/client";
+import { useVvE } from "@/lib/vve-context";
 import { toast } from "sonner";
 
 export function Header() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const { user, signOut, currentVvE } = useVvE();
+
+  const displayName = user?.full_name || user?.email?.split("@")[0] || "Gebruiker";
+  const initials = displayName.charAt(0).toUpperCase();
 
   async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOut();
     toast.success("U bent uitgelogd.");
     router.push("/login");
     router.refresh();
@@ -46,18 +50,29 @@ export function Header() {
         </Sheet>
       </div>
 
+      {currentVvE && (
+        <div className="hidden md:block">
+          <p className="text-sm text-muted-foreground">{currentVvE.name}</p>
+        </div>
+      )}
+
       <div className="flex-1" />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-              <span className="text-sm font-medium text-blue-700">H</span>
+              <span className="text-sm font-medium text-blue-700">{initials}</span>
             </div>
-            <span className="hidden sm:inline text-sm">Hidde</span>
+            <span className="hidden sm:inline text-sm">{displayName}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => router.push("/dashboard/instellingen")}>
+            <Settings className="mr-2 h-4 w-4" />
+            Instellingen
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout} className="text-red-600">
             <LogOut className="mr-2 h-4 w-4" />
             Uitloggen
