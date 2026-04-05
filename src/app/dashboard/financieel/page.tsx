@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wallet, Plus, TrendingUp, TrendingDown, PiggyBank, ArrowUpDown } from "lucide-react";
+import { Wallet, Plus, TrendingUp, TrendingDown, PiggyBank, ArrowUpDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useSupabaseData } from "@/lib/use-supabase-data";
+import { useVvE } from "@/lib/vve-context";
 
 interface Transaction {
   id: string;
@@ -25,7 +27,8 @@ interface Transaction {
   category: string;
   amount: number;
   type: "contribution" | "expense" | "income" | "reserve_deposit";
-  aiCategory: string;
+  ai_category?: string;
+  aiCategory?: string;
 }
 
 const aiCategories: Record<string, string> = {
@@ -37,50 +40,59 @@ const aiCategories: Record<string, string> = {
   Overig: "Overig",
 };
 
-const initialTransactions: Transaction[] = [
+const demoTransactions: Transaction[] = [
   { id: "1", date: "2026-02-20", description: "Maandelijkse bijdrage - alle leden", category: "Bijdragen", amount: 1200, type: "contribution", aiCategory: "Servicekosten" },
-  { id: "2", date: "2026-02-18", description: "Elektriciteit verlichting parkeergarage", category: "Energie", amount: -145.50, type: "expense" as const, aiCategory: "Energie" },
-  { id: "3", date: "2026-02-15", description: "Schoonmaak februari", category: "Onderhoud", amount: -250, type: "expense" as const, aiCategory: "Schoonmaak" },
-  { id: "4", date: "2026-02-10", description: "Verzekeringspremie Q1", category: "Verzekering", amount: -890, type: "expense" as const, aiCategory: "Verzekering" },
-  { id: "5", date: "2026-02-01", description: "Storting reservefonds", category: "Reservefonds", amount: -500, type: "reserve_deposit" as const, aiCategory: "Reserve" },
-  { id: "6", date: "2026-01-20", description: "Maandelijkse bijdrage - alle leden", category: "Bijdragen", amount: 1200, type: "contribution" as const, aiCategory: "Servicekosten" },
-  { id: "7", date: "2026-01-15", description: "Reparatie garagedeur box 12", category: "Onderhoud", amount: -375, type: "expense" as const, aiCategory: "Reparatie" },
+  { id: "2", date: "2026-02-18", description: "Elektriciteit verlichting parkeergarage", category: "Energie", amount: -145.50, type: "expense", aiCategory: "Energie" },
+  { id: "3", date: "2026-02-15", description: "Schoonmaak februari", category: "Onderhoud", amount: -250, type: "expense", aiCategory: "Schoonmaak" },
+  { id: "4", date: "2026-02-10", description: "Verzekeringspremie Q1", category: "Verzekering", amount: -890, type: "expense", aiCategory: "Verzekering" },
+  { id: "5", date: "2026-02-01", description: "Storting reservefonds", category: "Reservefonds", amount: -500, type: "reserve_deposit", aiCategory: "Reserve" },
+  { id: "6", date: "2026-01-20", description: "Maandelijkse bijdrage - alle leden", category: "Bijdragen", amount: 1200, type: "contribution", aiCategory: "Servicekosten" },
+  { id: "7", date: "2026-01-15", description: "Reparatie garagedeur box 12", category: "Onderhoud", amount: -375, type: "expense", aiCategory: "Reparatie" },
   { id: "8", date: "2026-01-10", description: "Schoonmaak januari", category: "Onderhoud", amount: -250, type: "expense", aiCategory: "Schoonmaak" },
 ];
 
 export default function FinancieelPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+  const { currentVvE } = useVvE();
+  const { data: transactions, loading, insert } = useSupabaseData<Transaction>("transactions", demoTransactions, {
+    orderBy: "date",
+    orderAsc: false,
+  });
+
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [newType, setNewType] = useState("");
   const [newAmount, setNewAmount] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
   const [newCategory, setNewCategory] = useState("");
 
-  function addTransaction() {
+  async function addTransaction() {
     if (!newType || !newAmount || !newDesc || !newDate) {
       toast.error("Vul alle verplichte velden in.");
       return;
     }
-    const amount = parseFloat(newAmount);
-    const isExpense = newType === "expense" || newType === "reserve_deposit";
-    const tx: Transaction = {
-      id: Date.now().toString(),
-      date: newDate,
-      description: newDesc,
-      category: newCategory || "Overig",
-      amount: isExpense ? -Math.abs(amount) : Math.abs(amount),
-      type: newType as Transaction["type"],
-      aiCategory: aiCategories[newCategory] || "Overig",
-    };
-    setTransactions((prev) => [tx, ...prev]);
-    setNewType("");
-    setNewAmount("");
-    setNewDesc("");
-    setNewCategory("");
-    setDialogOpen(false);
-    toast.success("Transactie toegevoegd!");
+    setSaving(true);
+    try {
+      const amount = parseFloat(newAmount);
+      const isExpense = newType === "expense" || newType === "reserve_deposit";
+      await insert({
+        date: newDate,
+        description: newDesc,
+        category: newCategory || "Overig",
+        amount: isExpense ? -Math.abs(amount) : Math.abs(amount),
+        type: newType as Transaction["type"],
+        ai_category: aiCategories[newCategory] || "Overig",
+        aiCategory: aiCategories[newCategory] || "Overig",
+      } as Partial<Transaction>);
+      setNewType(""); setNewAmount(""); setNewDesc(""); setNewCategory("");
+      setDialogOpen(false);
+      toast.success("Transactie toegevoegd!");
+    } catch (err) {
+      toast.error(`Fout: ${err instanceof Error ? err.message : "Onbekende fout"}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const filtered = transactions.filter(
@@ -90,6 +102,13 @@ export default function FinancieelPage() {
   const totalIncome = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const totalExpenses = Math.abs(transactions.filter(t => t.amount < 0 && t.type !== "reserve_deposit").reduce((s, t) => s + t.amount, 0));
   const balance = totalIncome - totalExpenses;
+  const contribution = currentVvE?.default_contribution || 50;
+
+  const getAiCategory = (t: Transaction) => t.ai_category || t.aiCategory || "Overig";
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -103,15 +122,10 @@ export default function FinancieelPage() {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Transactie toevoegen
-            </Button>
+            <Button><Plus className="mr-2 h-4 w-4" /> Transactie toevoegen</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nieuwe transactie</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle>Nieuwe transactie</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-4">
               <div className="space-y-2">
                 <Label>Type *</Label>
@@ -151,76 +165,39 @@ export default function FinancieelPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button className="w-full" onClick={addTransaction}>Opslaan</Button>
+              <Button className="w-full" onClick={addTransaction} disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Opslaan
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="h-4 w-4 text-green-600" />
-              <span className="text-sm text-muted-foreground">Inkomsten</span>
-            </div>
-            <p className="text-2xl font-bold text-green-600">&euro;{totalIncome.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingDown className="h-4 w-4 text-red-600" />
-              <span className="text-sm text-muted-foreground">Uitgaven</span>
-            </div>
-            <p className="text-2xl font-bold text-red-600">&euro;{totalExpenses.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <ArrowUpDown className="h-4 w-4 text-blue-600" />
-              <span className="text-sm text-muted-foreground">Saldo</span>
-            </div>
-            <p className="text-2xl font-bold">&euro;{balance.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 mb-2">
-              <PiggyBank className="h-4 w-4 text-purple-600" />
-              <span className="text-sm text-muted-foreground">Reservefonds</span>
-            </div>
-            <p className="text-2xl font-bold text-purple-600">&euro;12.450</p>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="pt-6"><div className="flex items-center gap-2 mb-2"><TrendingUp className="h-4 w-4 text-green-600" /><span className="text-sm text-muted-foreground">Inkomsten</span></div><p className="text-2xl font-bold text-green-600">&euro;{totalIncome.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="flex items-center gap-2 mb-2"><TrendingDown className="h-4 w-4 text-red-600" /><span className="text-sm text-muted-foreground">Uitgaven</span></div><p className="text-2xl font-bold text-red-600">&euro;{totalExpenses.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="flex items-center gap-2 mb-2"><ArrowUpDown className="h-4 w-4 text-blue-600" /><span className="text-sm text-muted-foreground">Saldo</span></div><p className="text-2xl font-bold">&euro;{balance.toLocaleString("nl-NL", { minimumFractionDigits: 2 })}</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="flex items-center gap-2 mb-2"><PiggyBank className="h-4 w-4 text-purple-600" /><span className="text-sm text-muted-foreground">Reservefonds</span></div><p className="text-2xl font-bold text-purple-600">&euro;12.450</p></CardContent></Card>
       </div>
 
-      {/* Contribution Info */}
       <Card className="border-blue-100 bg-blue-50/50">
         <CardContent className="py-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Maandelijkse bijdrage per eenheid</p>
-              <p className="text-xs text-muted-foreground">Op basis van gelijke breukdelen (1/24)</p>
+              <p className="text-xs text-muted-foreground">Op basis van gelijke breukdelen (1/{currentVvE?.total_units || 24})</p>
             </div>
-            <p className="text-xl font-bold text-blue-700">&euro;50,00</p>
+            <p className="text-xl font-bold text-blue-700">&euro;{contribution.toFixed(2).replace(".", ",")}</p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Transactions Table */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Transacties</CardTitle>
-            <Input
-              placeholder="Zoeken..."
-              className="max-w-xs"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <Input placeholder="Zoeken..." className="max-w-xs" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </CardHeader>
         <CardContent>
@@ -239,14 +216,8 @@ export default function FinancieelPage() {
                 <TableRow key={tx.id}>
                   <TableCell className="text-sm text-muted-foreground">{tx.date}</TableCell>
                   <TableCell className="font-medium">{tx.description}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{tx.category}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="text-xs bg-purple-50 text-purple-700">
-                      AI: {tx.aiCategory}
-                    </Badge>
-                  </TableCell>
+                  <TableCell><Badge variant="outline">{tx.category}</Badge></TableCell>
+                  <TableCell><Badge variant="secondary" className="text-xs bg-purple-50 text-purple-700">AI: {getAiCategory(tx)}</Badge></TableCell>
                   <TableCell className={`text-right font-mono ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
                     {tx.amount > 0 ? "+" : ""}&euro;{Math.abs(tx.amount).toLocaleString("nl-NL", { minimumFractionDigits: 2 })}
                   </TableCell>

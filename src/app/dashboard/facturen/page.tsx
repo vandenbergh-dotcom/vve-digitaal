@@ -18,6 +18,7 @@ import {
   Euro,
   CreditCard,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { useSupabaseData } from "@/lib/use-supabase-data";
+import { useVvE } from "@/lib/vve-context";
 
 // --- Types ---
 
@@ -224,7 +227,11 @@ function formatDate(dateStr: string): string {
 // --- Component ---
 
 export default function FacturenPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
+  const { currentVvE } = useVvE();
+  const { data: invoices, setData: setInvoices, loading: invoicesLoading, insert: insertInvoice, update: updateInvoice } = useSupabaseData<Invoice>("invoices", initialInvoices, {
+    orderBy: "created_at",
+    orderAsc: false,
+  });
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -352,42 +359,35 @@ export default function FacturenPage() {
     toast.success(`${newInvoices.length} facturen aangemaakt voor alle leden.`);
   }
 
-  function markAsPaid(invoiceId: string) {
-    setInvoices((prev) =>
-      prev.map((inv) =>
-        inv.id === invoiceId
-          ? { ...inv, status: "paid" as InvoiceStatus, paid_date: new Date().toISOString().split("T")[0] }
-          : inv
-      )
-    );
-    if (detailInvoice?.id === invoiceId) {
-      setDetailInvoice((prev) => prev ? { ...prev, status: "paid", paid_date: new Date().toISOString().split("T")[0] } : null);
-    }
-    toast.success("Factuur gemarkeerd als betaald.");
+  async function markAsPaid(invoiceId: string) {
+    const paid_date = new Date().toISOString().split("T")[0];
+    try {
+      await updateInvoice(invoiceId, { status: "paid" as InvoiceStatus, paid_date });
+      if (detailInvoice?.id === invoiceId) {
+        setDetailInvoice((prev) => prev ? { ...prev, status: "paid", paid_date } : null);
+      }
+      toast.success("Factuur gemarkeerd als betaald.");
+    } catch { toast.error("Fout bij bijwerken."); }
   }
 
-  function markAsOverdue(invoiceId: string) {
-    setInvoices((prev) =>
-      prev.map((inv) =>
-        inv.id === invoiceId ? { ...inv, status: "overdue" as InvoiceStatus } : inv
-      )
-    );
-    if (detailInvoice?.id === invoiceId) {
-      setDetailInvoice((prev) => prev ? { ...prev, status: "overdue" } : null);
-    }
-    toast.success("Factuur gemarkeerd als achterstallig.");
+  async function markAsOverdue(invoiceId: string) {
+    try {
+      await updateInvoice(invoiceId, { status: "overdue" as InvoiceStatus });
+      if (detailInvoice?.id === invoiceId) {
+        setDetailInvoice((prev) => prev ? { ...prev, status: "overdue" } : null);
+      }
+      toast.success("Factuur gemarkeerd als achterstallig.");
+    } catch { toast.error("Fout bij bijwerken."); }
   }
 
-  function cancelInvoice(invoiceId: string) {
-    setInvoices((prev) =>
-      prev.map((inv) =>
-        inv.id === invoiceId ? { ...inv, status: "cancelled" as InvoiceStatus } : inv
-      )
-    );
-    if (detailInvoice?.id === invoiceId) {
-      setDetailInvoice((prev) => prev ? { ...prev, status: "cancelled" } : null);
-    }
-    toast.success("Factuur geannuleerd.");
+  async function cancelInvoice(invoiceId: string) {
+    try {
+      await updateInvoice(invoiceId, { status: "cancelled" as InvoiceStatus });
+      if (detailInvoice?.id === invoiceId) {
+        setDetailInvoice((prev) => prev ? { ...prev, status: "cancelled" } : null);
+      }
+      toast.success("Factuur geannuleerd.");
+    } catch { toast.error("Fout bij bijwerken."); }
   }
 
   async function sendInvoice(invoice: Invoice) {
@@ -407,8 +407,8 @@ export default function FacturenPage() {
             due_date: invoice.due_date,
           },
           to_email: invoice.member_email,
-          vve_name: "Garagepark De Linden",
-          vve_iban: "NL91ABNA0417164300",
+          vve_name: currentVvE?.name || "Garagepark De Linden",
+          vve_iban: currentVvE?.iban || "NL91ABNA0417164300",
         }),
       });
       const data = await res.json();
