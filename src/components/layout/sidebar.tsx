@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Bell,
   Settings,
+  CreditCard,
   Building2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ const navItems = [
   { href: "/dashboard/jaarverslag", icon: BarChart3, label: "Jaarverslag" },
   { href: "/dashboard/ai-assistent", icon: MessageSquare, label: "AI Assistent" },
   { href: "/dashboard/mededelingen", icon: Bell, label: "Mededelingen" },
+  { href: "/dashboard/abonnement", icon: CreditCard, label: "Abonnement" },
   { href: "/dashboard/instellingen", icon: Settings, label: "Instellingen" },
 ];
 

@@ -14,6 +14,11 @@ export interface VvE {
   email_from?: string
   email_reply_to?: string
   invoice_footer?: string
+  subscription_plan?: 'starter' | 'plus' | 'professional'
+  subscription_status?: 'active' | 'cancelled' | 'past_due' | 'trial'
+  mollie_customer_id?: string
+  subscription_started_at?: string
+  trial_ends_at?: string
   created_at: string
   created_by: string
 }

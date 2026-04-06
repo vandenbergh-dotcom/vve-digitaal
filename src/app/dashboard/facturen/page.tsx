@@ -901,10 +901,6 @@ export default function FacturenPage() {
                       {detailInvoice.status === "overdue" ? "Herinnering versturen" : "Versturen per e-mail"}
                     </Button>
                   )}
-                  <Button variant="outline" onClick={() => createPaymentLink(detailInvoice)}>
-                    <CreditCard className="mr-2 h-4 w-4 text-blue-600" />
-                    iDEAL betaallink
-                  </Button>
                   <Button variant="outline" onClick={() => markAsPaid(detailInvoice.id)}>
                     <Check className="mr-2 h-4 w-4 text-green-600" />
                     Markeer als betaald
