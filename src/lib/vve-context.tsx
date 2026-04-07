@@ -93,7 +93,18 @@ export function VvEProvider({ children }: { children: ReactNode }) {
 
     try {
       const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      let authUser = null;
+      try {
+        const { data } = await supabase.auth.getUser();
+        authUser = data?.user;
+      } catch {
+        // Auth call failed - fall back to demo
+        setUser(DEMO_USER);
+        setCurrentVvE(DEMO_VVE);
+        setCurrentMember(DEMO_MEMBER);
+        setLoading(false);
+        return;
+      }
 
       if (!authUser) {
         setUser(null);

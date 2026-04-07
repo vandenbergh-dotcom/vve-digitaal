@@ -6,8 +6,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const { updateSession } = await import('@/lib/supabase/middleware')
-  return await updateSession(request)
+  try {
+    const { updateSession } = await import('@/lib/supabase/middleware')
+    return await updateSession(request)
+  } catch (err) {
+    // If middleware crashes (bad key, network error), let the request through
+    console.error('Auth middleware error:', err)
+    return NextResponse.next()
+  }
 }
 
 export const config = {

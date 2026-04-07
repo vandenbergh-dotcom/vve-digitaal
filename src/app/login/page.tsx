@@ -45,10 +45,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left - Gradient */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-12 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-12 flex-col justify-between">
         <div className="flex items-center gap-2 text-white">
           <Building2 className="h-8 w-8" />
-          <span className="text-xl font-bold">VvE Digitaal</span>
+          <span className="text-xl font-bold">VvE App</span>
         </div>
         <div className="text-white">
           <h2 className="text-3xl font-bold mb-4">
@@ -59,7 +59,7 @@ export default function LoginPage() {
           </p>
         </div>
         <p className="text-blue-200 text-sm">
-          &copy; {new Date().getFullYear()} VvE Digitaal
+          &copy; {new Date().getFullYear()} VvE App
         </p>
       </div>
 
@@ -68,11 +68,11 @@ export default function LoginPage() {
         <Card className="w-full max-w-md border-0 shadow-none">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-2 mb-4 lg:hidden">
-              <Building2 className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-bold">VvE Digitaal</span>
+              <Building2 className="h-8 w-8 text-emerald-600" />
+              <span className="text-xl font-bold">VvE App</span>
             </div>
             <CardTitle className="text-2xl">Welkom terug</CardTitle>
-            <CardDescription>Log in op uw VvE Digitaal account</CardDescription>
+            <CardDescription>Log in op uw VvE App account</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
@@ -105,7 +105,7 @@ export default function LoginPage() {
             </form>
             <div className="mt-6 text-center text-sm text-muted-foreground">
               Nog geen account?{" "}
-              <Link href="/signup" className="text-blue-600 hover:underline font-medium">
+              <Link href="/signup" className="text-emerald-600 hover:underline font-medium">
                 Registreer gratis
               </Link>
             </div>

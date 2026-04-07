@@ -40,8 +40,15 @@ export function useSupabaseData<T>(
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!isConnected || !isSupabaseConfigured() || !currentVvE) {
+    if (!isSupabaseConfigured()) {
       setData(demoData);
+      setLoading(false);
+      return;
+    }
+
+    if (!isConnected || !currentVvE) {
+      // Supabase configured but no VvE context yet (new user or loading)
+      setData([]);
       setLoading(false);
       return;
     }

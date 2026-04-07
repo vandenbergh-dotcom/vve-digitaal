@@ -20,11 +20,20 @@ export default function SignupPage() {
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
+    if (!name || !email || !password) {
+      toast.error("Vul alle velden in.");
+      return;
+    }
+    if (password.length < 8) {
+      toast.error("Wachtwoord moet minimaal 8 tekens zijn.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -33,14 +42,27 @@ export default function SignupPage() {
       });
 
       if (error) {
-        toast.error(error.message);
+        if (error.message.includes("already registered")) {
+          toast.error("Dit e-mailadres is al in gebruik. Probeer in te loggen.");
+        } else {
+          toast.error(error.message);
+        }
         return;
       }
 
-      toast.success("Account aangemaakt! U kunt nu inloggen.");
+      // If email confirmation is required, user gets a session but needs to confirm
+      if (data?.user && !data.session) {
+        toast.success("Account aangemaakt! Controleer uw e-mail om te bevestigen.");
+        router.push("/login");
+        return;
+      }
+
+      // Auto-confirmed: go straight to onboarding
+      toast.success("Welkom bij VvE App!");
       router.push("/dashboard/onboarding");
       router.refresh();
-    } catch {
+    } catch (err) {
+      console.error("Signup error:", err);
       toast.error("Er is iets misgegaan. Probeer het opnieuw.");
     } finally {
       setLoading(false);
@@ -50,21 +72,21 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left - Gradient */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-12 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-12 flex-col justify-between">
         <div className="flex items-center gap-2 text-white">
           <Building2 className="h-8 w-8" />
-          <span className="text-xl font-bold">VvE Digitaal</span>
+          <span className="text-xl font-bold">VvE App</span>
         </div>
         <div className="text-white">
           <h2 className="text-3xl font-bold mb-4">
             Begin vandaag met slim VvE beheer
           </h2>
-          <p className="text-blue-100 text-lg">
-            Gratis voor kleine VvE&apos;s. Geen creditcard nodig. In 2 minuten actief.
+          <p className="text-emerald-100 text-lg">
+            Gratis voor kleine VvE&apos;s. Geen creditcard nodig. In 5 minuten actief.
           </p>
         </div>
-        <p className="text-blue-200 text-sm">
-          &copy; {new Date().getFullYear()} VvE Digitaal
+        <p className="text-emerald-200 text-sm">
+          &copy; {new Date().getFullYear()} VvE App
         </p>
       </div>
 
@@ -73,8 +95,8 @@ export default function SignupPage() {
         <Card className="w-full max-w-md border-0 shadow-none">
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-2 mb-4 lg:hidden">
-              <Building2 className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-bold">VvE Digitaal</span>
+              <Building2 className="h-8 w-8 text-emerald-600" />
+              <span className="text-xl font-bold">VvE App</span>
             </div>
             <CardTitle className="text-2xl">Account aanmaken</CardTitle>
             <CardDescription>Start met het digitaliseren van uw VvE</CardDescription>
@@ -115,7 +137,7 @@ export default function SignupPage() {
                   minLength={8}
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Gratis registreren
               </Button>
@@ -125,7 +147,7 @@ export default function SignupPage() {
             </p>
             <div className="mt-6 text-center text-sm text-muted-foreground">
               Al een account?{" "}
-              <Link href="/login" className="text-blue-600 hover:underline font-medium">
+              <Link href="/login" className="text-emerald-600 hover:underline font-medium">
                 Inloggen
               </Link>
             </div>
