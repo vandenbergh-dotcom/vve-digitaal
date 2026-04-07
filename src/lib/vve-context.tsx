@@ -121,14 +121,14 @@ export function VvEProvider({ children }: { children: ReactNode }) {
       });
 
       // Get the user's first VvE membership
-      const { data: memberData } = await supabase
+      const { data: memberRows } = await supabase
         .from("members")
         .select("*, vves(*)")
         .eq("user_id", authUser.id)
         .eq("is_active", true)
-        .limit(1)
-        .single();
+        .limit(1);
 
+      const memberData = memberRows?.[0];
       if (memberData) {
         setCurrentMember({
           id: memberData.id,
