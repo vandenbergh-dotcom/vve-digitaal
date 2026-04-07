@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     const html = generateInvoiceEmailHtml(invoice, vve_name, vve_iban);
 
     const { data, error } = await resend.emails.send({
-      from: `${vve_name} <facturen@vvedigitaal.nl>`,
+      from: `${vve_name} <facturen@vveapp.com>`,
       to: to_email,
       subject: `Factuur ${invoice.invoice_number} - ${vve_name}`,
       html,
