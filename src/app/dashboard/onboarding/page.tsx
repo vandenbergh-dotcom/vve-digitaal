@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { useVvE } from "@/lib/vve-context";
 import {
   Building2,
   Upload,
@@ -15,6 +17,7 @@ import {
   Trash2,
   Mail,
   FileText,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -116,9 +119,93 @@ export default function OnboardingPage() {
     setStep(Math.min(step + 1, TOTAL_STEPS));
   }
 
-  function handleComplete() {
-    toast.success("VvE succesvol aangemaakt! Welkom bij VvE Digitaal.");
-    router.push("/dashboard");
+  const { user, refreshVvE, isConnected } = useVvE();
+  const [saving, setSaving] = useState(false);
+
+  async function handleComplete() {
+    setSaving(true);
+    try {
+      if (isConnected && user) {
+        const supabase = createClient();
+
+        // 1. Create VvE
+        const { data: vveData, error: vveErr } = await supabase
+          .from("vves")
+          .insert({
+            name: vveName,
+            address: address,
+            city: city,
+            postal_code: postalCode,
+            type: type || "garage",
+            total_units: units,
+            kvk_number: kvk || null,
+            iban: iban || null,
+            iban_name: ibanName || null,
+            default_contribution: parseFloat(contribution) || 50,
+            payment_term_days: parseInt(paymentTermDays) || 30,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (vveErr) throw new Error(vveErr.message);
+
+        const vveId = vveData.id;
+
+        // 2. Create units
+        const prefix = unitPrefix !== "none" ? unitPrefix : "";
+        const unitInserts = Array.from({ length: units }, (_, i) => ({
+          vve_id: vveId,
+          unit_number: prefix ? `${prefix} ${i + 1}` : String(i + 1),
+          type: type || "garage",
+          breukdeel_numerator: 1,
+          breukdeel_denominator: units,
+        }));
+
+        const { error: unitsErr } = await supabase.from("units").insert(unitInserts);
+        if (unitsErr) console.error("Units error:", unitsErr.message);
+
+        // 3. Create current user as board member
+        const { error: selfErr } = await supabase.from("members").insert({
+          user_id: user.id,
+          vve_id: vveId,
+          full_name: user.full_name || user.email,
+          email: user.email,
+          role: "board_chair",
+          is_active: true,
+        });
+        if (selfErr) console.error("Self member error:", selfErr.message);
+
+        // 4. Create other members (without user_id - they'll link when they sign up)
+        const otherMembers = members
+          .filter((m) => m.name && m.email && m.email !== user.email)
+          .map((m) => ({
+            vve_id: vveId,
+            full_name: m.name,
+            email: m.email,
+            role: m.role || "owner",
+            is_active: true,
+          }));
+
+        if (otherMembers.length > 0) {
+          const { error: membersErr } = await supabase.from("members").insert(otherMembers);
+          if (membersErr) console.error("Members error:", membersErr.message);
+        }
+
+        // 5. Create notification settings
+        await supabase.from("notification_settings").insert({ vve_id: vveId });
+
+        // 6. Refresh context so dashboard picks up the new VvE
+        await refreshVvE();
+      }
+
+      toast.success("VvE succesvol aangemaakt! Welkom bij VvE App.");
+      router.push("/dashboard");
+    } catch (err) {
+      toast.error(`Fout bij aanmaken: ${err instanceof Error ? err.message : "Onbekende fout"}`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const roleLabels: Record<string, string> = {
@@ -562,9 +649,9 @@ export default function OnboardingPage() {
                 </div>
               </div>
 
-              <Button className="w-full" size="lg" onClick={handleComplete}>
-                <Rocket className="mr-2 h-4 w-4" />
-                Naar het dashboard
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-700" size="lg" onClick={handleComplete} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
+                {saving ? "VvE aanmaken..." : "VvE aanmaken en starten"}
               </Button>
               <Button variant="outline" className="w-full" onClick={() => setStep(5)}>
                 <ArrowLeft className="mr-2 h-4 w-4" /> Terug naar vorige stap

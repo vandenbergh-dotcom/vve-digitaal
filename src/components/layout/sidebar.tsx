@@ -62,8 +62,8 @@ export function Sidebar() {
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-white border-r">
       {/* Logo */}
       <div className="flex items-center gap-2 h-16 px-6 border-b">
-        <Building2 className="h-7 w-7 text-blue-600" />
-        <span className="text-lg font-bold">VvE Digitaal</span>
+        <Building2 className="h-7 w-7 text-emerald-600" />
+        <span className="text-lg font-bold">VvE App</span>
       </div>
 
       {/* VvE Name */}
@@ -86,11 +86,11 @@ export function Sidebar() {
                   className={cn(
                     "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                     isActive
-                      ? "bg-blue-50 text-blue-700"
+                      ? "bg-emerald-50 text-emerald-700"
                       : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                   )}
                 >
-                  <item.icon className={cn("h-4.5 w-4.5", isActive ? "text-blue-600" : "text-gray-400")} />
+                  <item.icon className={cn("h-4.5 w-4.5", isActive ? "text-emerald-600" : "text-gray-400")} />
                   {item.label}
                 </Link>
               </li>
@@ -132,11 +132,11 @@ export function MobileSidebar() {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-blue-50 text-blue-700"
+                    ? "bg-emerald-50 text-emerald-700"
                     : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                 )}
               >
-                <item.icon className={cn("h-4.5 w-4.5", isActive ? "text-blue-600" : "text-gray-400")} />
+                <item.icon className={cn("h-4.5 w-4.5", isActive ? "text-emerald-600" : "text-gray-400")} />
                 {item.label}
               </Link>
             </li>
