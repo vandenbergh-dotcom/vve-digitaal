@@ -17,6 +17,26 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  async function handleForgotPassword() {
+    if (!email) {
+      toast.error("Vul eerst uw e-mailadres in.");
+      return;
+    }
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success("Wachtwoord reset link verzonden naar " + email);
+      }
+    } catch {
+      toast.error("Er is iets misgegaan.");
+    }
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -88,7 +108,16 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Wachtwoord</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Wachtwoord</Label>
+                  <button
+                    type="button"
+                    onClick={handleForgotPassword}
+                    className="text-xs text-emerald-600 hover:underline"
+                  >
+                    Wachtwoord vergeten?
+                  </button>
+                </div>
                 <Input
                   id="password"
                   type="password"
@@ -98,7 +127,7 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Inloggen
               </Button>
