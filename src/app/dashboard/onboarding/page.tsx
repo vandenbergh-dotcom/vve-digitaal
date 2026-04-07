@@ -129,7 +129,7 @@ export default function OnboardingPage() {
     owner: "Eigenaar",
   };
 
-  const unitOptions = Array.from({ length: units }, (_, i) => `${unitPrefix} ${i + 1}`);
+  const unitOptions = Array.from({ length: units }, (_, i) => unitPrefix !== "none" ? `${unitPrefix} ${i + 1}` : String(i + 1));
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center px-4">
@@ -242,7 +242,7 @@ export default function OnboardingPage() {
                       <SelectItem value="Box">Box 1, Box 2, ...</SelectItem>
                       <SelectItem value="Unit">Unit 1, Unit 2, ...</SelectItem>
                       <SelectItem value="Apt">Apt 1, Apt 2, ...</SelectItem>
-                      <SelectItem value="">1, 2, 3, ...</SelectItem>
+                      <SelectItem value="none">1, 2, 3, ...</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -260,7 +260,7 @@ export default function OnboardingPage() {
               {units > 0 && (
                 <div className="bg-blue-50 rounded-lg p-4">
                   <p className="text-sm text-blue-800">
-                    Er worden <strong>{units} eenheden</strong> aangemaakt: {unitPrefix ? `${unitPrefix} 1` : "1"} t/m {unitPrefix ? `${unitPrefix} ${units}` : String(units)},
+                    Er worden <strong>{units} eenheden</strong> aangemaakt: {unitPrefix !== "none" ? `${unitPrefix} 1` : "1"} t/m {unitPrefix !== "none" ? `${unitPrefix} ${units}` : String(units)},
                     elk met breukdeel <strong>1/{units}</strong>.
                     {breukdeelType === "custom" && " U kunt de breukdelen later per eenheid aanpassen."}
                   </p>
