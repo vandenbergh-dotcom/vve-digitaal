@@ -75,18 +75,6 @@ export default function InstellingenPage() {
       setEmailFrom(currentVvE.email_from || "");
       setEmailReplyTo(currentVvE.email_reply_to || "");
       setInvoiceFooter(currentVvE.invoice_footer || "");
-    } else {
-      // Demo defaults
-      setVveName("Garagepark De Linden");
-      setVveAddress("Lindenlaan 15");
-      setVvePostal("1234 AB");
-      setVveCity("Amsterdam");
-      setVveKvk("12345678");
-      setVveIban("NL91ABNA0417164300");
-      setVveTenName("VvE Garagepark De Linden");
-      setEmailFrom("bestuur@garageparkdelinden.nl");
-      setEmailReplyTo("bestuur@garageparkdelinden.nl");
-      setInvoiceFooter("Bij vragen over deze factuur kunt u contact opnemen met het bestuur.");
     }
   }, [currentVvE]);
 
